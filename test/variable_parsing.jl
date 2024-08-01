@@ -4,7 +4,7 @@ using Test
 using ModelingToolkit: value, Flow
 using SymbolicUtils: FnType
 
-@independent_variables t
+@parameters t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 
@@ -60,7 +60,7 @@ end
 # @test isequal(s1, collect(s))
 # @test isequal(σ1, σ)
 
-#@independent_variables t
+#@parameters t
 #@variables x[1:2](t)
 #x1 = Num[Variable{FnType{Tuple{Any}, Real}}(:x, 1)(t.val),
 #      Variable{FnType{Tuple{Any}, Real}}(:x, 2)(t.val)]
@@ -104,7 +104,6 @@ end
     y = 2, [connect = Flow]
 end
 
-@test_throws ErrorException ModelingToolkit.getdefault(x)
 @test !hasmetadata(x, VariableDefaultValue)
 @test getmetadata(x, VariableConnectType) == Flow
 @test getmetadata(x, VariableUnit) == u
@@ -112,13 +111,11 @@ end
 @test getmetadata(y, VariableConnectType) == Flow
 
 a = rename(value(x), :a)
-@test_throws ErrorException ModelingToolkit.getdefault(a)
-@test !hasmetadata(a, VariableDefaultValue)
-@test getmetadata(a, VariableConnectType) == Flow
-@test getmetadata(a, VariableUnit) == u
+@test !hasmetadata(x, VariableDefaultValue)
+@test getmetadata(x, VariableConnectType) == Flow
+@test getmetadata(x, VariableUnit) == u
 
-@independent_variables t
-@variables x(t)=1 [connect = Flow, unit = u]
+@variables t x(t)=1 [connect = Flow, unit = u]
 
 @test getmetadata(x, VariableDefaultValue) == 1
 @test getmetadata(x, VariableConnectType) == Flow

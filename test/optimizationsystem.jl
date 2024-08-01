@@ -180,7 +180,7 @@ end
 end
 
 @testset "time dependent var" begin
-    @independent_variables t
+    @parameters t
     @variables x(t) y
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2

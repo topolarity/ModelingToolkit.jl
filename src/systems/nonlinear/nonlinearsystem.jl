@@ -146,8 +146,10 @@ function NonlinearSystem(eqs, unknowns, ps;
     end
     jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
+    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
+    for k in collect(keys(defaults))
+        defaults[default_toterm(k)] = defaults[k]
+    end
 
     unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
@@ -194,12 +196,8 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
         return cache[1]
     end
 
-    # observed equations may depend on unknowns, so substitute them in first
-    # TODO: rather keep observed derivatives unexpanded, like "Differential(obs)(expr)"?
-    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
-    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
+    rhs = [eq.rhs for eq in equations(sys)]
     vals = [dv for dv in unknowns(sys)]
-
     if sparse
         jac = sparsejacobian(rhs, vals, simplify = simplify)
     else
@@ -220,8 +218,7 @@ function generate_jacobian(
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
-    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
-    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
+    rhs = [eq.rhs for eq in equations(sys)]
     vals = [dv for dv in unknowns(sys)]
     if sparse
         hess = [sparsehessian(rhs[i], vals, simplify = simplify) for i in 1:length(rhs)]

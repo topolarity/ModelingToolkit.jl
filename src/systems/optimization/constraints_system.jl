@@ -133,8 +133,10 @@ function ConstraintsSystem(constraints, unknowns, ps;
 
     jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    for k in collect(keys(defaults))
+        defaults[default_toterm(k)] = defaults[k]
+    end
 
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, unknowns′)

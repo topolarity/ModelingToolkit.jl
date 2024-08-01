@@ -1,14 +1,3 @@
-"""
-    union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-
-Unite x and y gracefully when they could be nothing. If neither is nothing, x and y are united normally. If one is nothing, the other is returned unmodified. If both are nothing, nothing is returned.
-"""
-function union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-    isnothing(x) && return y # y can be nothing or something
-    isnothing(y) && return x # x can be nothing or something
-    return union(x, y) # both x and y are something and can be united normally
-end
-
 get_iv(D::Differential) = D.x
 
 function make_operation(@nospecialize(op), args)
@@ -112,13 +101,6 @@ const CheckNone = 0
 const CheckAll = 1 << 0
 const CheckComponents = 1 << 1
 const CheckUnits = 1 << 2
-
-function check_independent_variables(ivs)
-    for iv in ivs
-        isparameter(iv) ||
-            @warn "Independent variable $iv should be defined with @independent_variables $iv."
-    end
-end
 
 function check_parameters(ps, iv)
     for p in ps
@@ -235,7 +217,7 @@ function iv_from_nested_derivative(x, op = Differential)
 end
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
-getdefault(v) = value(Symbolics.getdefaultval(v))
+getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
 function getdefaulttype(v)
     def = value(getmetadata(unwrap(v), Symbolics.VariableDefaultValue, nothing))
     def === nothing ? Float64 : typeof(def)
@@ -252,9 +234,7 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
-        if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
-            continue
-        end
+        (haskey(defs, v) || !hasdefault(unwrap(v))) && continue
         defs[v] = getdefault(v)
     end
     return defs
@@ -358,8 +338,7 @@ Return a `Set` containing all variables in `x` that appear in
 Example:
 
 ```
-t = ModelingToolkit.t_nounits
-@variables u(t) y(t)
+@variables t u(t) y(t)
 D  = Differential(t)
 v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
@@ -431,8 +410,7 @@ collect_differential_variables(sys) = collect_operator_variables(sys, Differenti
 Return  a `Set` with all applied operators in `x`, example:
 
 ```
-@independent_variables t
-@variables u(t) y(t)
+@variables t u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u
 ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
@@ -665,43 +643,42 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
         vs = Any[vs...]
     end
     T = eltype(vs)
+    if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
+        return vs
+    else
+        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
+        isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
 
-    # return early if there is nothing to do
-    #Base.isconcretetype(T) && (!tofloat || T === float(T)) && return vs # TODO: disabled float(T) to restore missing errors in https://github.com/SciML/ModelingToolkit.jl/issues/2873
-    Base.isconcretetype(T) && !tofloat && return vs
-
-    sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
-    isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
-
-    C = nothing
-    for v in vs
-        E = typeof(v)
-        if E <: Number
-            if tofloat
-                E = float(E)
+        C = nothing
+        for v in vs
+            E = typeof(v)
+            if E <: Number
+                if tofloat
+                    E = float(E)
+                end
+            end
+            if C === nothing
+                C = E
+            end
+            if use_union
+                C = Union{C, E}
+            else
+                @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
+                C = E
             end
         end
-        if C === nothing
-            C = E
-        end
-        if use_union
-            C = Union{C, E}
-        else
-            @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
-            C = E
-        end
-    end
 
-    y = similar(vs, C)
-    for i in eachindex(vs)
-        if (vs[i] isa Number) & tofloat
-            y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
-        else
-            y[i] = vs[i]
+        y = similar(vs, C)
+        for i in eachindex(vs)
+            if (vs[i] isa Number) & tofloat
+                y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
+            else
+                y[i] = vs[i]
+            end
         end
-    end
 
-    return y
+        return y
+    end
 end
 
 struct BitDict <: AbstractDict{Int, Int}

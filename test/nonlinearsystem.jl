@@ -9,7 +9,7 @@ using ModelingToolkit: get_default_or_guess, MTKParameters
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 # Define some variables
-@parameters σ ρ β
+@parameters t σ ρ β
 @constants h = 1
 @variables x y z
 
@@ -115,7 +115,7 @@ lorenz2 = lorenz(:lorenz2)
 
 # system promotion
 using OrdinaryDiffEq
-@independent_variables t
+@variables t
 D = Differential(t)
 @named subsys = convert_system(ODESystem, lorenz1, t)
 @named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
@@ -126,7 +126,7 @@ sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
 @test_throws ArgumentError convert_system(ODESystem, sys, t)
 
-@parameters σ ρ β
+@parameters t σ ρ β
 @variables x y z
 
 # Define a nonlinear system
@@ -178,9 +178,8 @@ end
 end
 
 # observed variable handling
-@independent_variables t
+@variables t x(t) RHS(t)
 @parameters τ
-@variables x(t) RHS(t)
 @named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ];
     observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
@@ -189,7 +188,7 @@ RHS2 = RHS
 @test isequal(RHS, RHS2)
 
 # issue #1358
-@independent_variables t
+@variables t
 @variables v1(t) v2(t) i1(t) i2(t)
 eq = [v1 ~ sin(2pi * t * h)
       v1 - v2 ~ i1
@@ -284,37 +283,3 @@ sys = structural_simplify(ns)
 @test length(equations(sys)) == 0
 sys = structural_simplify(ns; conservative = true)
 @test length(equations(sys)) == 1
-
-# https://github.com/SciML/ModelingToolkit.jl/issues/2858
-@testset "Jacobian/Hessian with observed equations that depend on unknowns" begin
-    @variables x y z
-    @parameters σ ρ β
-    eqs = [0 ~ σ * (y - x)
-           0 ~ x * (ρ - z) - y
-           0 ~ x * y - β * z]
-    guesses = [x => 1.0, y => 0.0, z => 0.0]
-    ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-    @mtkbuild ns = NonlinearSystem(eqs)
-
-    @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
-                                           2x*(-z + ρ) -β-(x^2)])
-    # solve without analytical jacobian
-    prob = NonlinearProblem(ns, guesses, ps)
-    sol = solve(prob, NewtonRaphson())
-    @test sol.retcode == ReturnCode.Success
-
-    # solve with analytical jacobian
-    prob = NonlinearProblem(ns, guesses, ps, jac = true)
-    sol = solve(prob, NewtonRaphson())
-    @test sol.retcode == ReturnCode.Success
-
-    # system that contains a chain of observed variables when simplified
-    @variables x y z
-    eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
-    @mtkbuild ns = NonlinearSystem(eqs) # solve for y with observed chain z -> x -> y
-    @test isequal(expand.(calculate_jacobian(ns)), [3 // 2 + y;;])
-    @test isequal(calculate_hessian(ns), [[1;;]])
-    prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
-    sol = solve(prob, NewtonRaphson())
-    @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
-end

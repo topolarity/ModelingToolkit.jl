@@ -972,8 +972,7 @@ vars_sub2 = @variables s2(t)
 @named partial_sub = ODESystem(Equation[], t, vars_sub2, [])
 @named sub = extend(partial_sub, sub)
 
-# no warnings for systems without events
-new_sys2 = @test_nowarn complete(substitute(sys2, Dict(:sub => sub)))
+new_sys2 = complete(substitute(sys2, Dict(:sub => sub)))
 Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
     new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
     new_sys2.sub.s1, new_sys2.sub.s2])
@@ -1194,59 +1193,4 @@ end
     buffer = zeros(3)
     @test_nowarn obsfn(buffer, [1.0], ps..., 3.0)
     @test buffer ≈ [2.0, 3.0, 4.0]
-end
-
-# https://github.com/SciML/ModelingToolkit.jl/issues/2818
-@testset "Custom independent variable" begin
-    @independent_variables x
-    @variables y(x)
-    @test_nowarn @named sys = ODESystem([y ~ 0], x)
-
-    @variables x y(x)
-    @test_logs (:warn,) @named sys = ODESystem([y ~ 0], x)
-
-    @parameters T
-    D = Differential(T)
-    @variables x(T)
-    eqs = [D(x) ~ 0.0]
-    initialization_eqs = [x ~ T]
-    guesses = [x => 0.0]
-    @named sys2 = ODESystem(eqs, T; initialization_eqs, guesses)
-    prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
-    sol2 = solve(prob2)
-    @test all(sol2[x] .== 1.0)
-end
-
-# https://github.com/SciML/ModelingToolkit.jl/issues/2502
-@testset "Extend systems with a field that can be nothing" begin
-    A = Dict(:a => 1)
-    B = Dict(:b => 2)
-    @named A1 = ODESystem(Equation[], t, [], [])
-    @named B1 = ODESystem(Equation[], t, [], [])
-    @named A2 = ODESystem(Equation[], t, [], []; metadata = A)
-    @named B2 = ODESystem(Equation[], t, [], []; metadata = B)
-    @test ModelingToolkit.get_metadata(extend(A1, B1)) == nothing
-    @test ModelingToolkit.get_metadata(extend(A1, B2)) == B
-    @test ModelingToolkit.get_metadata(extend(A2, B1)) == A
-    @test Set(ModelingToolkit.get_metadata(extend(A2, B2))) == Set(A ∪ B)
-end
-
-# https://github.com/SciML/ModelingToolkit.jl/issues/2859
-@testset "Initialization with defaults from observed equations (edge case)" begin
-    @variables x(t) y(t) z(t)
-    eqs = [D(x) ~ 0, y ~ x, D(z) ~ 0]
-    defaults = [x => 1, z => y]
-    @named sys = ODESystem(eqs, t; defaults)
-    ssys = structural_simplify(sys)
-    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
-    @test prob[x] == prob[y] == prob[z] == 1.0
-
-    @parameters y0
-    @variables x(t) y(t) z(t)
-    eqs = [D(x) ~ 0, y ~ y0 / x, D(z) ~ y]
-    defaults = [y0 => 1, x => 1, z => y]
-    @named sys = ODESystem(eqs, t; defaults)
-    ssys = structural_simplify(sys)
-    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
-    @test prob[x] == prob[y] == prob[z] == 1.0
 end

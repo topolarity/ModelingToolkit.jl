@@ -27,8 +27,6 @@ toconstant(s::Num) = wrap(toconstant(value(s)))
 $(SIGNATURES)
 
 Define one or more constants.
-
-See also [`@independent_variables`](@ref), [`@parameters`](@ref) and [`@variables`](@ref).
 """
 macro constants(xs...)
     Symbolics._parse_vars(:constants,

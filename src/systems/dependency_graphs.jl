@@ -15,9 +15,8 @@ Example:
 
 ```julia
 using ModelingToolkit
-using ModelingToolkit: t_nounits as t
 @parameters β γ κ η
-@variables S(t) I(t) R(t)
+@variables t S(t) I(t) R(t)
 
 rate₁ = β * S * I
 rate₂ = γ * I + t

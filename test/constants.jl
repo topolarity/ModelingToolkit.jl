@@ -6,8 +6,7 @@ UMT = ModelingToolkit.UnitfulUnitCheck
 @constants a = 1
 @test_throws MT.ArgumentError @constants b
 
-@independent_variables t
-@variables x(t) w(t)
+@variables t x(t) w(t)
 D = Differential(t)
 eqs = [D(x) ~ a]
 @named sys = ODESystem(eqs, t)
@@ -29,8 +28,7 @@ simp = structural_simplify(sys)
 @constants β=1 [unit = u"m/s"]
 UMT.get_unit(β)
 @test MT.isconstant(β)
-@independent_variables t [unit = u"s"]
-@variables x(t) [unit = u"m"]
+@variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
 eqs = [D(x) ~ β]
 @named sys = ODESystem(eqs, t)

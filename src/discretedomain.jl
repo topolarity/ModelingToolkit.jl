@@ -98,7 +98,7 @@ $(FIELDS)
 ```jldoctest
 julia> using Symbolics
 
-julia> t = ModelingToolkit.t_nounits
+julia> @variables t;
 
 julia> Δ = Sample(t, 0.01)
 (::Sample) (generic function with 2 methods)
@@ -166,9 +166,7 @@ The `ShiftIndex` operator allows you to index a signal and obtain a shifted disc
 # Examples
 
 ```
-julia> t = ModelingToolkit.t_nounits;
-
-julia> @variables x(t);
+julia> @variables t x(t);
 
 julia> k = ShiftIndex(t, 0.1);
 

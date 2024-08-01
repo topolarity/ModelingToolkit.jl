@@ -4,8 +4,7 @@ $(TYPEDSIGNATURES)
 Generate `NonlinearSystem`, dependent variables, and parameters from an `NonlinearProblem`.
 """
 function modelingtoolkitize(
-        prob::Union{NonlinearProblem, NonlinearLeastSquaresProblem};
-        u_names = nothing, p_names = nothing, kwargs...)
+        prob::NonlinearProblem; u_names = nothing, p_names = nothing, kwargs...)
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
 
@@ -38,22 +37,13 @@ function modelingtoolkitize(
     end
 
     if DiffEqBase.isinplace(prob)
-        if prob isa NonlinearLeastSquaresProblem
-            rhs = ArrayInterface.restructure(
-                prob.f.resid_prototype, similar(prob.f.resid_prototype, Num))
-            prob.f(rhs, vars, params)
-            eqs = vcat([0.0 ~ rhs[i] for i in 1:length(prob.f.resid_prototype)]...)
-        else
-            rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
-            prob.f(rhs, vars, params)
-            eqs = vcat([0.0 ~ rhs[i] for i in 1:length(rhs)]...)
-        end
-
+        rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
+        prob.f(rhs, vars, params)
     else
         rhs = prob.f(vars, params)
-        out_def = prob.f(prob.u0, prob.p)
-        eqs = vcat([0.0 ~ rhs[i] for i in 1:length(out_def)]...)
     end
+    out_def = prob.f(prob.u0, prob.p)
+    eqs = vcat([0.0 ~ rhs[i] for i in 1:length(out_def)]...)
 
     sts = vec(collect(vars))
     _params = params

@@ -355,13 +355,6 @@ function independent_variables(sys::AbstractMultivariateSystem)
     return getfield(sys, :ivs)
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the independent variable(s) of the system `sys`.
-
-See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
-"""
 function independent_variables(sys::AbstractSystem)
     @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
@@ -655,31 +648,12 @@ for prop in [:eqs
              :solved_unknowns
              :split_idxs
              :parent
-             :index_cache
-             :is_scalar_noise]
-    fname_get = Symbol(:get_, prop)
-    fname_has = Symbol(:has_, prop)
+             :index_cache]
+    fname1 = Symbol(:get_, prop)
+    fname2 = Symbol(:has_, prop)
     @eval begin
-        """
-        $(TYPEDSIGNATURES)
-
-        Get the internal field `$($(QuoteNode(prop)))` of a system `sys`.
-        It only includes `$($(QuoteNode(prop)))` local to `sys`; not those of its subsystems,
-        like `unknowns(sys)`, `parameters(sys)` and `equations(sys)` does.
-        This is equivalent to, but preferred over `sys.$($(QuoteNode(prop)))`.
-
-        See also [`has_$($(QuoteNode(prop)))`](@ref).
-        """
-        $fname_get(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
-
-        """
-        $(TYPEDSIGNATURES)
-
-        Returns whether the system `sys` has the internal field `$($(QuoteNode(prop)))`.
-
-        See also [`get_$($(QuoteNode(prop)))`](@ref).
-        """
-        $fname_has(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
+        $fname1(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
+        $fname2(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
     end
 end
 
@@ -1029,14 +1003,6 @@ function namespace_expr(
     end
 end
 _nonum(@nospecialize x) = x isa Num ? x.val : x
-
-"""
-$(TYPEDSIGNATURES)
-
-Get the unknown variables of the system `sys` and its subsystems.
-
-See also [`ModelingToolkit.get_unknowns`](@ref).
-"""
 function unknowns(sys::AbstractSystem)
     sts = get_unknowns(sys)
     systems = get_systems(sys)
@@ -1057,13 +1023,6 @@ function unknowns(sys::AbstractSystem)
     unique(nonunique_unknowns)
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the parameters of the system `sys` and its subsystems.
-
-See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
-"""
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
@@ -1094,12 +1053,6 @@ function dependent_parameters(sys::AbstractSystem)
     end
 end
 
-"""
-$(TYPEDSIGNATURES)
-Get the parameter dependencies of the system `sys` and its subsystems.
-
-See also [`defaults`](@ref) and [`ModelingToolkit.get_parameter_dependencies`](@ref).
-"""
 function parameter_dependencies(sys::AbstractSystem)
     pdeps = get_parameter_dependencies(sys)
     if isnothing(pdeps)
@@ -1118,13 +1071,6 @@ function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys), dependent_parameters(sys))
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the guesses for variables in the initialization system of the system `sys` and its subsystems.
-
-See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_guesses`](@ref).
-"""
 function guesses(sys::AbstractSystem)
     guess = get_guesses(sys)
     systems = get_systems(sys)
@@ -1155,15 +1101,6 @@ end
 
 Base.@deprecate default_u0(x) defaults(x) false
 Base.@deprecate default_p(x) defaults(x) false
-
-"""
-$(TYPEDSIGNATURES)
-
-Get the default values of the system sys and its subsystems.
-If they are not explicitly provided, variables and parameters are initialized to these values.
-
-See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
-"""
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
     defs = get_defaults(sys)
@@ -1194,15 +1131,6 @@ end
 
 flatten(sys::AbstractSystem, args...) = sys
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the flattened equations of the system `sys` and its subsystems.
-It may include some abbreviations and aliases of observables.
-It is often the most useful way to inspect the equations of a system.
-
-See also [`full_equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
-"""
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
     systems = get_systems(sys)
@@ -1217,13 +1145,6 @@ function equations(sys::AbstractSystem)
     end
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the initialization equations of the system `sys` and its subsystems.
-
-See also [`guesses`](@ref), [`defaults`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
-"""
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)
     systems = get_systems(sys)
@@ -1302,24 +1223,21 @@ end
 struct ObservedFunctionCache{S}
     sys::S
     dict::Dict{Any, Any}
-    steady_state::Bool
     eval_expression::Bool
     eval_module::Module
 end
 
-function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__)
-    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module)
+function ObservedFunctionCache(sys; eval_expression = false, eval_module = @__MODULE__)
+    return ObservedFunctionCache(sys, Dict(), eval_expression, eval_module)
 end
 
 # This is hit because ensemble problems do a deepcopy
 function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     sys = deepcopy(ofc.sys)
     dict = deepcopy(ofc.dict)
-    steady_state = ofc.steady_state
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
-    newofc = ObservedFunctionCache(sys, dict, steady_state, eval_expression, eval_module)
+    newofc = ObservedFunctionCache(sys, dict, eval_expression, eval_module)
     stackdict[ofc] = newofc
     return newofc
 end
@@ -1329,12 +1247,6 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
             eval_module = ofc.eval_module)
-    end
-    if ofc.steady_state
-        obs = let fn = obs
-            fn1(u, p, t = Inf) = fn(u, p, t)
-            fn1
-        end
     end
     if args === ()
         return obs
@@ -2316,10 +2228,11 @@ This example builds the following feedback interconnection and linearizes it fro
 
 ```julia
 using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
+@variables t
 function plant(; name)
     @variables x(t) = 1
     @variables u(t)=0 y(t)=0
+    D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
     ODESystem(eqs, t; name = name)
@@ -2328,6 +2241,7 @@ end
 function ref_filt(; name)
     @variables x(t)=0 y(t)=0
     @variables u(t)=0 [input = true]
+    D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
     ODESystem(eqs, t, name = name)
@@ -2577,10 +2491,8 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
+extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
 by default.
-
-See also [`compose`](@ref).
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
         gui_metadata = get_gui_metadata(sys))
@@ -2596,30 +2508,28 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
         end
     end
 
-    # collect fields common to all system types
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union_nothing(parameter_dependencies(basesys), parameter_dependencies(sys))
+    base_deps = parameter_dependencies(basesys)
+    deps = parameter_dependencies(sys)
+    dep_ps = isnothing(base_deps) ? deps :
+             isnothing(deps) ? base_deps : union(base_deps, deps)
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    meta = union_nothing(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
-    args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
-    kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
-        discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
-        name = name, gui_metadata = gui_metadata)
 
-    # collect fields specific to some system types
-    if basesys isa ODESystem
-        ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
-        guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
-        kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
+    if length(ivs) == 0
+        T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
+            continuous_events = cevs, discrete_events = devs, gui_metadata = gui_metadata,
+            parameter_dependencies = dep_ps)
+    elseif length(ivs) == 1
+        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
+            systems = syss, continuous_events = cevs, discrete_events = devs,
+            gui_metadata = gui_metadata, parameter_dependencies = dep_ps)
     end
-
-    return T(args...; kwargs...)
 end
 
 function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
@@ -2629,10 +2539,8 @@ end
 """
 $(SIGNATURES)
 
-Compose multiple systems together. The resulting system would inherit the first
+compose multiple systems together. The resulting system would inherit the first
 system's name.
-
-See also [`extend`](@ref).
 """
 function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys))
     nsys = length(systems)
@@ -2653,7 +2561,7 @@ end
 """
     missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
 
-Returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
+returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
 """
 function missing_variable_defaults(
         sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
@@ -2681,10 +2589,8 @@ end
 
 keytype(::Type{<:Pair{T, V}}) where {T, V} = T
 function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
-    if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing &&
-       !isempty(get_continuous_events(sys)) ||
-       has_discrete_events(sys) && get_discrete_events(sys) !== nothing &&
-       !isempty(get_discrete_events(sys))
+    if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing ||
+       has_discrete_events(sys) && get_discrete_events(sys) !== nothing
         @warn "`substitute` only supports performing substitutions in equations. This system has events, which will not be updated."
     end
     if keytype(eltype(rules)) <: Symbol
@@ -2776,10 +2682,14 @@ ModelingToolkit.dump_unknowns(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
 """
 function dump_unknowns(sys::AbstractSystem)
-    defs = defaults(sys)
+    defs = varmap_with_toterm(defaults(sys))
+    gs = varmap_with_toterm(guesses(sys))
     map(dump_variable_metadata.(unknowns(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
+        end
+        if haskey(gs, meta.var)
+            meta = merge(meta, (; guess = gs[meta.var]))
         end
         meta
     end

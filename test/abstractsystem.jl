@@ -2,8 +2,7 @@ using ModelingToolkit
 using Test
 MT = ModelingToolkit
 
-@independent_variables t
-@variables x
+@variables t x
 struct MyNLS <: MT.AbstractSystem
     name::Any
     systems::Any

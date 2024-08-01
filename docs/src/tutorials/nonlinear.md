@@ -9,20 +9,24 @@ We use (unknown) variables for our nonlinear system.
 ```@example nonlinear
 using ModelingToolkit, NonlinearSolve
 
-# Define a nonlinear system
 @variables x y z
 @parameters σ ρ β
-eqs = [0 ~ σ * (y - x)
-       0 ~ x * (ρ - z) - y
-       0 ~ x * y - β * z]
-guesses = [x => 1.0, y => 0.0, z => 0.0]
-ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-@mtkbuild ns = NonlinearSystem(eqs)
 
-guesses = [x => 1.0, y => 0.0, z => 0.0]
-ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
+# Define a nonlinear system
+eqs = [0 ~ σ * (y - x),
+    0 ~ x * (ρ - z) - y,
+    0 ~ x * y - β * z]
+@mtkbuild ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
 
-prob = NonlinearProblem(ns, guesses, ps)
+guess = [x => 1.0,
+    y => 0.0,
+    z => 0.0]
+
+ps = [σ => 10.0
+      ρ => 26.0
+      β => 8 / 3]
+
+prob = NonlinearProblem(ns, guess, ps)
 sol = solve(prob, NewtonRaphson())
 ```
 
@@ -30,6 +34,6 @@ We can similarly ask to generate the `NonlinearProblem` with the analytical
 Jacobian function:
 
 ```@example nonlinear
-prob = NonlinearProblem(ns, guesses, ps, jac = true)
+prob = NonlinearProblem(ns, guess, ps, jac = true)
 sol = solve(prob, NewtonRaphson())
 ```

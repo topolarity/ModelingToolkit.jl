@@ -3,7 +3,7 @@ using ModelingToolkit: SymScope
 using Symbolics: arguments, value
 using Test
 
-@independent_variables t
+@parameters t
 @variables a b(t) c d e(t)
 
 b = ParentScope(b)
@@ -52,8 +52,7 @@ end
 @test renamed([:foo :bar :baz], c) == Symbol("foo₊c")
 @test renamed([:foo :bar :baz], d) == :d
 
-@independent_variables t
-@parameters a b c d e f
+@parameters t a b c d e f
 p = [a
      ParentScope(b)
      ParentScope(ParentScope(c))

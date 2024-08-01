@@ -34,10 +34,9 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit, JumpProcesses
-using ModelingToolkit: t_nounits as t
 
 @parameters β γ
-@variables S(t) I(t) R(t)
+@variables t S(t) I(t) R(t)
 rate₁   = β*S*I
 affect₁ = [S ~ S - 1, I ~ I + 1]
 rate₂   = γ*I
@@ -119,7 +118,6 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
-            check_independent_variables([iv])
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
         end
@@ -176,8 +174,10 @@ function JumpSystem(eqs, iv, unknowns, ps;
             :JumpSystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    for k in collect(keys(defaults))
+        defaults[default_toterm(k)] = defaults[k]
+    end
 
     unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()

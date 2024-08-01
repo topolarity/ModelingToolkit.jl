@@ -10,10 +10,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables x(t) y(t) z(t)
+@variables t x(t) y(t) z(t)
+D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -184,7 +184,6 @@ struct ODESystem <: AbstractODESystem
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
-            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
@@ -238,8 +237,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :ODESystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
+    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
+    for k in collect(keys(defaults))
+        defaults[default_toterm(k)] = defaults[k]
+    end
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
@@ -412,7 +413,7 @@ function build_explicit_observed_function(sys, ts;
         Set(arguments(st)[1] for st in sts if iscall(st) && operation(st) === getindex))
 
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
-    param_set = Set(full_parameters(sys))
+    param_set = Set(ps)
     param_set = union(param_set,
         Set(arguments(p)[1] for p in param_set if iscall(p) && operation(p) === getindex))
     param_set_ns = Set(unknowns(sys, p) for p in full_parameters(sys))

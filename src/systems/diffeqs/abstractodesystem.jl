@@ -399,7 +399,29 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         ArrayInterface.restructure(u0 .* u0', M)
     end
 
-    observedfun = ObservedFunctionCache(sys; steady_state, eval_expression, eval_module)
+    obs = observed(sys)
+    observedfun = if steady_state
+        let sys = sys, dict = Dict()
+            function generated_observed(obsvar, args...)
+                obs = get!(dict, value(obsvar)) do
+                    SymbolicIndexingInterface.observed(
+                        sys, obsvar; eval_expression, eval_module)
+                end
+                if args === ()
+                    return let obs = obs
+                        fn1(u, p, t = Inf) = obs(u, p, t)
+                        fn1
+                    end
+                elseif length(args) == 2
+                    return obs(args..., Inf)
+                else
+                    return obs(args...)
+                end
+            end
+        end
+    else
+        ObservedFunctionCache(sys; eval_expression, eval_module)
+    end
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -725,16 +747,10 @@ function get_u0(
         defs = mergedefaults(defs, parammap, ps)
     end
 
-    # Convert observed equations "lhs ~ rhs" into defaults.
-    # Use the order "lhs => rhs" by default, but flip it to "rhs => lhs"
-    # if "lhs" is known by other means (parameter, another default, ...)
-    # TODO: Is there a better way to determine which equations to flip?
-    obs = map(x -> x.lhs => x.rhs, observed(sys))
-    obs = map(x -> x[1] in keys(defs) ? reverse(x) : x, obs)
-    obs = filter!(x -> !(x[1] isa Number), obs) # exclude e.g. "0 => x^2 + y^2 - 25"
-    obsmap = isempty(obs) ? Dict() : todict(obs)
-
-    defs = mergedefaults(defs, obsmap, u0map, dvs)
+    obs = filter!(x -> !(x[1] isa Number),
+        map(x -> isparameter(x.rhs) ? x.lhs => x.rhs : x.rhs => x.lhs, observed(sys)))
+    observedmap = isempty(obs) ? Dict() : todict(obs)
+    defs = mergedefaults(defs, observedmap, u0map, dvs)
     if symbolic_u0
         u0 = varmap_to_vars(
             u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
@@ -762,7 +778,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         warn_initialize_determined = true,
         build_initializeprob = true,
         initialization_eqs = [],
-        fully_determined = false,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
@@ -836,7 +851,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
-            initialization_eqs, eval_expression, eval_module, fully_determined)
+            initialization_eqs, eval_expression, eval_module)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
@@ -1479,7 +1494,6 @@ InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            simplify = false,
                            linenumbers = true, parallel = SerialForm(),
                            initialization_eqs = [],
-                           fully_determined = false,
                            kwargs...) where {iip}
 ```
 
@@ -1529,7 +1543,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         check_length = true,
         warn_initialize_determined = true,
         initialization_eqs = [],
-        fully_determined = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1538,10 +1551,10 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         isys = get_initializesystem(sys; initialization_eqs)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
-            generate_initializesystem(sys; initialization_eqs); fully_determined)
+            generate_initializesystem(sys; initialization_eqs); fully_determined = false)
     else
         isys = structural_simplify(
-            generate_initializesystem(sys; u0map, initialization_eqs); fully_determined)
+            generate_initializesystem(sys; u0map, initialization_eqs); fully_determined = false)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
@@ -1556,10 +1569,10 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     nunknown = length(unknowns(isys))
 
     if warn_initialize_determined && neqs > nunknown
-        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
+        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
     if warn_initialize_determined && neqs < nunknown
-        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
+        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
 
     parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?

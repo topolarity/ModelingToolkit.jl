@@ -101,7 +101,6 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
-            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
         end
@@ -149,8 +148,10 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :DiscreteSystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    for k in collect(keys(defaults))
+        defaults[default_toterm(k)] = defaults[k]
+    end
 
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
